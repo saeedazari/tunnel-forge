@@ -146,9 +146,11 @@ class _SettingsPanelState extends State<SettingsPanel> {
       }
     }
     if (oldWidget.proxySettings.upstreamHost !=
-            widget.proxySettings.upstreamHost &&
-        _upstreamHostController.text != widget.proxySettings.upstreamHost) {
-      _upstreamHostController.text = widget.proxySettings.upstreamHost;
+        widget.proxySettings.upstreamHost) {
+      final nextText = widget.proxySettings.upstreamHost;
+      if (_upstreamHostController.text != nextText) {
+        _upstreamHostController.text = nextText;
+      }
     }
     if (oldWidget.proxySettings.upstreamPort !=
         widget.proxySettings.upstreamPort) {
