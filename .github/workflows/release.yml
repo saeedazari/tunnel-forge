@@ -216,7 +216,7 @@ jobs:
         working-directory: ${{ env.REPRO_SOURCE_DIR }}
         run: |
           export PUB_CACHE="$(pwd)/.pub-cache"
-          "${REPRO_FLUTTER_DIR}/bin/flutter" pub get --enforce-lockfile
+          "${REPRO_FLUTTER_DIR}/bin/flutter" pub get
 
       - name: Resolve arm64-v8a Go dependencies
         working-directory: ${{ env.REPRO_SOURCE_DIR }}/android/gvisor
@@ -263,7 +263,7 @@ jobs:
         working-directory: ${{ env.REPRO_SOURCE_DIR }}
         run: |
           export PUB_CACHE="$(pwd)/.pub-cache"
-          "${REPRO_FLUTTER_DIR}/bin/flutter" pub get --enforce-lockfile
+          "${REPRO_FLUTTER_DIR}/bin/flutter" pub get
 
       - name: Resolve x86_64 Go dependencies
         working-directory: ${{ env.REPRO_SOURCE_DIR }}/android/gvisor
