@@ -62,6 +62,10 @@ class ProfileStore {
   static const prefsKeyProxySocksPort = 'proxy_socks_port_v1';
   static const prefsKeyProxyAllowLanConnections =
       'proxy_allow_lan_connections_v1';
+  static const prefsKeyUpstreamEnabled = 'proxy_upstream_enabled_v1';
+  static const prefsKeyUpstreamType = 'proxy_upstream_type_v1';
+  static const prefsKeyUpstreamHost = 'proxy_upstream_host_v1';
+  static const prefsKeyUpstreamPort = 'proxy_upstream_port_v1';
   static const prefsKeySplitTunnelEnabled = 'split_tunnel_enabled_v1';
   static const prefsKeySplitTunnelMode = 'split_tunnel_mode_v1';
   static const prefsKeySplitTunnelInclusivePackages =
@@ -148,6 +152,15 @@ class ProfileStore {
         fallback: ProxySettings.defaultSocksPort,
       ),
       allowLanConnections: p.getBool(prefsKeyProxyAllowLanConnections) ?? false,
+      upstreamEnabled: p.getBool(prefsKeyUpstreamEnabled) ?? false,
+      upstreamType: UpstreamProxyType.fromJson(
+        p.getString(prefsKeyUpstreamType),
+      ),
+      upstreamHost: p.getString(prefsKeyUpstreamHost) ?? '',
+      upstreamPort: ProxySettings.normalizePort(
+        p.getInt(prefsKeyUpstreamPort) ?? ProxySettings.defaultUpstreamPort,
+        fallback: ProxySettings.defaultUpstreamPort,
+      ),
     );
   }
 
@@ -170,6 +183,16 @@ class ProfileStore {
     await p.setBool(
       prefsKeyProxyAllowLanConnections,
       settings.allowLanConnections,
+    );
+    await p.setBool(prefsKeyUpstreamEnabled, settings.upstreamEnabled);
+    await p.setString(prefsKeyUpstreamType, settings.upstreamType.jsonValue);
+    await p.setString(prefsKeyUpstreamHost, settings.upstreamHost.trim());
+    await p.setInt(
+      prefsKeyUpstreamPort,
+      ProxySettings.normalizePort(
+        settings.upstreamPort,
+        fallback: ProxySettings.defaultUpstreamPort,
+      ),
     );
   }
 

@@ -168,6 +168,7 @@ class TunnelVpnService : VpnService() {
                         socksEnabled = true,
                         socksPort = proxySocksPort,
                         allowLanConnections = proxyAllowLan,
+                        upstreamProxy = upstreamProxyFromIntent(intent),
                     )
                 if (proxyConfig.httpPort == proxyConfig.socksPort) {
                     AppLog.e(TAG, "${prefixAttempt(attemptId)}ACTION_START invalid proxy ports http=${proxyConfig.httpPort} socks=${proxyConfig.socksPort}")
@@ -201,7 +202,7 @@ class TunnelVpnService : VpnService() {
                 VpnTunnelEvents.emitEngineLog(
                     Log.DEBUG,
                     TAG,
-                    "${prefixAttempt(attemptId)}ACTION_START accepted server=$server userPresent=${user.isNotEmpty()} pskPresent=${psk.isNotEmpty()} dnsMode=${if (dnsAutomatic) "automatic" else "manual"} dns=${dnsServers.joinToString(",") { "${it.host}[${it.protocol.shortLabel}]" }} mtu=$tunMtu splitTunnelEnabled=$splitTunnelEnabled splitTunnelMode=$splitTunnelMode inclusiveApps=${inclusivePackages?.size ?: 0} exclusiveApps=${exclusivePackages?.size ?: 0} http=${proxyConfig.httpPort} socks=${proxyConfig.socksPort} lan=${if (proxyAllowLan) "on" else "off"}",
+                    "${prefixAttempt(attemptId)}ACTION_START accepted server=$server userPresent=${user.isNotEmpty()} pskPresent=${psk.isNotEmpty()} dnsMode=${if (dnsAutomatic) "automatic" else "manual"} dns=${dnsServers.joinToString(",") { "${it.host}[${it.protocol.shortLabel}]" }} mtu=$tunMtu splitTunnelEnabled=$splitTunnelEnabled splitTunnelMode=$splitTunnelMode inclusiveApps=${inclusivePackages?.size ?: 0} exclusiveApps=${exclusivePackages?.size ?: 0} http=${proxyConfig.httpPort} socks=${proxyConfig.socksPort} lan=${if (proxyAllowLan) "on" else "off"} upstream=${proxyConfig.upstreamProxy?.let { "${it.type.wireValue}://${it.host}:${it.port}" } ?: "off"}",
                 )
                 // TUN establish() can block; do not hold up onStartCommand after startForeground.
                 val startupThread =
@@ -823,7 +824,10 @@ class TunnelVpnService : VpnService() {
         val runtime =
             ProxyServerRuntime(
                 config = localProxyRuntimeConfig(effectiveConfig, effectiveExposure),
-                transport = DirectSocketProxyTransport(logger = logger),
+                transport =
+                    DirectSocketProxyTransport(logger = logger).let { direct ->
+                        effectiveConfig.upstreamProxy?.let { ChainedProxyTransport(direct, it, logger) } ?: direct
+                    },
                 levelLogger = logger,
             )
         try {
@@ -988,6 +992,10 @@ class TunnelVpnService : VpnService() {
         const val EXTRA_PROXY_HTTP_PORT = "proxyHttpPort"
         const val EXTRA_PROXY_SOCKS_PORT = "proxySocksPort"
         const val EXTRA_PROXY_ALLOW_LAN = "proxyAllowLan"
+        const val EXTRA_UPSTREAM_PROXY_ENABLED = "upstreamProxyEnabled"
+        const val EXTRA_UPSTREAM_PROXY_TYPE = "upstreamProxyType"
+        const val EXTRA_UPSTREAM_PROXY_HOST = "upstreamProxyHost"
+        const val EXTRA_UPSTREAM_PROXY_PORT = "upstreamProxyPort"
 
         private const val CHANNEL_ID = "tunnel_forge_vpn"
         private const val NOTIFICATION_ID = 7101
@@ -1097,6 +1105,14 @@ class TunnelVpnService : VpnService() {
                 )
             return DnsConfigSupport.sanitize(servers)
         }
+
+        internal fun upstreamProxyFromIntent(intent: Intent): UpstreamProxyConfig? =
+            UpstreamProxyConfig.fromValues(
+                enabled = intent.getBooleanExtra(EXTRA_UPSTREAM_PROXY_ENABLED, false),
+                type = intent.getStringExtra(EXTRA_UPSTREAM_PROXY_TYPE),
+                host = intent.getStringExtra(EXTRA_UPSTREAM_PROXY_HOST),
+                port = intent.getIntExtra(EXTRA_UPSTREAM_PROXY_PORT, 0),
+            )
 
         internal fun localProxyRuntimeConfig(
             config: ProxyRuntimeConfig,

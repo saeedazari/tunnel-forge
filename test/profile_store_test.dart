@@ -223,6 +223,29 @@ void main() {
       expect(proxy.allowLanConnections, isTrue);
     });
 
+    test('persists upstream proxy settings', () async {
+      await store.saveProxySettings(
+        const ProxySettings(
+          upstreamEnabled: true,
+          upstreamType: UpstreamProxyType.http,
+          upstreamHost: ' 192.168.50.51 ',
+          upstreamPort: 18888,
+        ),
+      );
+
+      final proxy = await store.loadProxySettings();
+      expect(proxy.upstreamEnabled, isTrue);
+      expect(proxy.upstreamType, UpstreamProxyType.http);
+      expect(proxy.upstreamHost, '192.168.50.51');
+      expect(proxy.upstreamPort, 18888);
+      expect(proxy.upstreamUsable, isTrue);
+    });
+
+    test('upstream proxy is unusable without a host', () {
+      const settings = ProxySettings(upstreamEnabled: true);
+      expect(settings.upstreamUsable, isFalse);
+    });
+
     test('persists split-tunnel settings', () async {
       await store.saveSplitTunnelSettings(
         const SplitTunnelSettings(

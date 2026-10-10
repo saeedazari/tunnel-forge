@@ -108,6 +108,7 @@ class ProxyTunnelService : Service() {
                         socksEnabled = true,
                         socksPort = socksPort,
                         allowLanConnections = allowLanConnections,
+                        upstreamProxy = TunnelVpnService.upstreamProxyFromIntent(intent),
                     )
                 shutdownActiveSession(reason = "restart")
                 connectedEmitted = false
@@ -344,14 +345,18 @@ class ProxyTunnelService : Service() {
              */
             localGvisorOutboundThread = startGvisorOutboundPump(attemptId, loopThread, packetBridge)
             localGvisorInboundThread = startGvisorInboundPump(attemptId, loopThread, dnsResolver)
-            val transport =
+            val transportLogger = { level: Int, message: String ->
+                VpnTunnelEvents.emitEngineLog(level, TAG, "${prefixAttempt(attemptId)}$message")
+            }
+            val gvisorTransport =
                 GvisorProxyTransport(
                     tunneledResolver = dnsResolver?.let { resolver -> { host -> resolver.resolve(host) } },
                     requireTunneledDns = true,
-                    logger = { level, message ->
-                        VpnTunnelEvents.emitEngineLog(level, TAG, "${prefixAttempt(attemptId)}$message")
-                    },
+                    logger = transportLogger,
                 )
+            val transport: ProxyTransport =
+                proxyConfig.upstreamProxy?.let { ChainedProxyTransport(gvisorTransport, it, transportLogger) }
+                    ?: gvisorTransport
             val exposure =
                 LanProxyAddressResolver(this).resolve(
                     httpPort = proxyConfig.httpPort,
@@ -852,6 +857,10 @@ class ProxyTunnelService : Service() {
         const val EXTRA_PROXY_HTTP_PORT = "proxyHttpPort"
         const val EXTRA_PROXY_SOCKS_PORT = "proxySocksPort"
         const val EXTRA_PROXY_ALLOW_LAN = "proxyAllowLan"
+        const val EXTRA_UPSTREAM_PROXY_ENABLED = "upstreamProxyEnabled"
+        const val EXTRA_UPSTREAM_PROXY_TYPE = "upstreamProxyType"
+        const val EXTRA_UPSTREAM_PROXY_HOST = "upstreamProxyHost"
+        const val EXTRA_UPSTREAM_PROXY_PORT = "upstreamProxyPort"
         const val DEFAULT_HTTP_PORT = 8080
         const val DEFAULT_SOCKS_PORT = 1080
         const val DEFAULT_LINK_MTU = TunnelVpnService.DEFAULT_TUN_MTU

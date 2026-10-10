@@ -174,6 +174,15 @@ class MainActivity : FlutterActivity() {
                     val proxyHttpPort = sanitizePort(args[VpnContract.ARG_PROXY_HTTP_PORT], ProxyTunnelService.DEFAULT_HTTP_PORT)
                     val proxySocksPort = sanitizePort(args[VpnContract.ARG_PROXY_SOCKS_PORT], ProxyTunnelService.DEFAULT_SOCKS_PORT)
                     val proxyAllowLan = args[VpnContract.ARG_PROXY_ALLOW_LAN] as? Boolean ?: false
+                    val upstreamProxyEnabled = args[VpnContract.ARG_UPSTREAM_PROXY_ENABLED] as? Boolean ?: false
+                    val upstreamProxyType = args[VpnContract.ARG_UPSTREAM_PROXY_TYPE] as? String ?: ""
+                    val upstreamProxyHost = (args[VpnContract.ARG_UPSTREAM_PROXY_HOST] as? String)?.trim().orEmpty()
+                    val upstreamProxyPort = sanitizePort(args[VpnContract.ARG_UPSTREAM_PROXY_PORT], 0)
+                    if (upstreamProxyEnabled && (upstreamProxyHost.isEmpty() || upstreamProxyPort == 0)) {
+                        AppLog.e(TAG, "vpn_call connect rejected bad_args (incomplete upstream proxy) attempt=$attemptId")
+                        result.error("bad_args", "Upstream proxy needs a host and a valid port", null)
+                        return@setMethodCallHandler
+                    }
                     if (proxyHttpPort == proxySocksPort) {
                         AppLog.e(TAG, "vpn_call connect rejected bad_args (duplicate proxy ports) attempt=$attemptId")
                         result.error("bad_args", "HTTP and SOCKS5 ports must differ", null)
@@ -226,6 +235,10 @@ class MainActivity : FlutterActivity() {
                                 putExtra(ProxyTunnelService.EXTRA_PROXY_HTTP_PORT, proxyHttpPort)
                                 putExtra(ProxyTunnelService.EXTRA_PROXY_SOCKS_PORT, proxySocksPort)
                                 putExtra(ProxyTunnelService.EXTRA_PROXY_ALLOW_LAN, proxyAllowLan)
+                                putExtra(ProxyTunnelService.EXTRA_UPSTREAM_PROXY_ENABLED, upstreamProxyEnabled)
+                                putExtra(ProxyTunnelService.EXTRA_UPSTREAM_PROXY_TYPE, upstreamProxyType)
+                                putExtra(ProxyTunnelService.EXTRA_UPSTREAM_PROXY_HOST, upstreamProxyHost)
+                                putExtra(ProxyTunnelService.EXTRA_UPSTREAM_PROXY_PORT, upstreamProxyPort)
                             }
                         } else {
                             Intent(this, TunnelVpnService::class.java).apply {
@@ -244,6 +257,10 @@ class MainActivity : FlutterActivity() {
                                 putExtra(TunnelVpnService.EXTRA_PROXY_HTTP_PORT, proxyHttpPort)
                                 putExtra(TunnelVpnService.EXTRA_PROXY_SOCKS_PORT, proxySocksPort)
                                 putExtra(TunnelVpnService.EXTRA_PROXY_ALLOW_LAN, proxyAllowLan)
+                                putExtra(TunnelVpnService.EXTRA_UPSTREAM_PROXY_ENABLED, upstreamProxyEnabled)
+                                putExtra(TunnelVpnService.EXTRA_UPSTREAM_PROXY_TYPE, upstreamProxyType)
+                                putExtra(TunnelVpnService.EXTRA_UPSTREAM_PROXY_HOST, upstreamProxyHost)
+                                putExtra(TunnelVpnService.EXTRA_UPSTREAM_PROXY_PORT, upstreamProxyPort)
                                 putStringArrayListExtra(
                                     TunnelVpnService.EXTRA_SPLIT_TUNNEL_INCLUSIVE_PACKAGES,
                                     ArrayList(inclusivePackages),

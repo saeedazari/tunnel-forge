@@ -160,13 +160,31 @@ class DnsServerConfig {
   };
 }
 
+/// Protocol spoken to the optional upstream proxy.
+enum UpstreamProxyType {
+  socks5('socks5'),
+  http('http');
+
+  const UpstreamProxyType(this.jsonValue);
+  final String jsonValue;
+
+  static UpstreamProxyType fromJson(String? value) => UpstreamProxyType.values
+      .firstWhere((e) => e.jsonValue == value, orElse: () => socks5);
+}
+
 /// Global local-proxy settings shared across VPN and local-proxy modes.
 class ProxySettings {
   const ProxySettings({
     this.httpPort = defaultHttpPort,
     this.socksPort = defaultSocksPort,
     this.allowLanConnections = false,
+    this.upstreamEnabled = false,
+    this.upstreamType = UpstreamProxyType.socks5,
+    this.upstreamHost = '',
+    this.upstreamPort = defaultUpstreamPort,
   });
+
+  static const int defaultUpstreamPort = 1080;
 
   static const int defaultHttpPort = 8080;
   static const int defaultSocksPort = 1080;
@@ -176,6 +194,13 @@ class ProxySettings {
   final int httpPort;
   final int socksPort;
   final bool allowLanConnections;
+  final bool upstreamEnabled;
+  final UpstreamProxyType upstreamType;
+  final String upstreamHost;
+  final int upstreamPort;
+
+  /// True when chaining is on and the endpoint is complete enough to use.
+  bool get upstreamUsable => upstreamEnabled && upstreamHost.trim().isNotEmpty;
 
   static int normalizePort(int value, {required int fallback}) {
     if (value < minPort || value > maxPort) return fallback;
@@ -192,11 +217,19 @@ class ProxySettings {
     int? httpPort,
     int? socksPort,
     bool? allowLanConnections,
+    bool? upstreamEnabled,
+    UpstreamProxyType? upstreamType,
+    String? upstreamHost,
+    int? upstreamPort,
   }) {
     return ProxySettings(
       httpPort: httpPort ?? this.httpPort,
       socksPort: socksPort ?? this.socksPort,
       allowLanConnections: allowLanConnections ?? this.allowLanConnections,
+      upstreamEnabled: upstreamEnabled ?? this.upstreamEnabled,
+      upstreamType: upstreamType ?? this.upstreamType,
+      upstreamHost: upstreamHost ?? this.upstreamHost,
+      upstreamPort: upstreamPort ?? this.upstreamPort,
     );
   }
 }

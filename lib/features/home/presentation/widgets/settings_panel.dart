@@ -100,6 +100,8 @@ class _SettingsPanelState extends State<SettingsPanel> {
 
   late final TextEditingController _httpPortController;
   late final TextEditingController _socksPortController;
+  late final TextEditingController _upstreamHostController;
+  late final TextEditingController _upstreamPortController;
   late final TextEditingController _connectivityUrlController;
   late final TextEditingController _connectivityTimeoutController;
   String? _connectivityUrlError;
@@ -113,6 +115,12 @@ class _SettingsPanelState extends State<SettingsPanel> {
     );
     _socksPortController = TextEditingController(
       text: '${widget.proxySettings.socksPort}',
+    );
+    _upstreamHostController = TextEditingController(
+      text: widget.proxySettings.upstreamHost,
+    );
+    _upstreamPortController = TextEditingController(
+      text: '${widget.proxySettings.upstreamPort}',
     );
     _connectivityUrlController = TextEditingController(
       text: widget.connectivityCheckSettings.url,
@@ -135,6 +143,18 @@ class _SettingsPanelState extends State<SettingsPanel> {
       final nextText = '${widget.proxySettings.socksPort}';
       if (_socksPortController.text != nextText) {
         _socksPortController.text = nextText;
+      }
+    }
+    if (oldWidget.proxySettings.upstreamHost !=
+            widget.proxySettings.upstreamHost &&
+        _upstreamHostController.text != widget.proxySettings.upstreamHost) {
+      _upstreamHostController.text = widget.proxySettings.upstreamHost;
+    }
+    if (oldWidget.proxySettings.upstreamPort !=
+        widget.proxySettings.upstreamPort) {
+      final nextText = '${widget.proxySettings.upstreamPort}';
+      if (_upstreamPortController.text != nextText) {
+        _upstreamPortController.text = nextText;
       }
     }
     if (oldWidget.connectivityCheckSettings.url !=
@@ -163,6 +183,8 @@ class _SettingsPanelState extends State<SettingsPanel> {
   void dispose() {
     _httpPortController.dispose();
     _socksPortController.dispose();
+    _upstreamHostController.dispose();
+    _upstreamPortController.dispose();
     _connectivityUrlController.dispose();
     _connectivityTimeoutController.dispose();
     super.dispose();
@@ -446,6 +468,105 @@ class _SettingsPanelState extends State<SettingsPanel> {
                       ),
                     ),
                   ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: _kCardGap),
+        Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: _kCardContentPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SwitchListTile(
+                  key: const Key('upstream_proxy_switch'),
+                  contentPadding: EdgeInsets.zero,
+                  title: _cardTitle(t.upstreamProxy),
+                  subtitle: _cardText(
+                    widget.proxySettings.upstreamEnabled
+                        ? t.upstreamProxyOn
+                        : t.upstreamProxyOff,
+                    color: widget.colorScheme.onSurfaceVariant,
+                  ),
+                  value: widget.proxySettings.upstreamEnabled,
+                  onChanged: widget.routingLocked
+                      ? null
+                      : (value) => widget.onProxySettingsChanged(
+                          widget.proxySettings.copyWith(upstreamEnabled: value),
+                        ),
+                ),
+                if (widget.proxySettings.upstreamEnabled) ...[
+                  const SizedBox(height: 12),
+                  SegmentedButton<UpstreamProxyType>(
+                    key: const Key('upstream_proxy_type'),
+                    segments: const [
+                      ButtonSegment(
+                        value: UpstreamProxyType.socks5,
+                        label: Text('SOCKS5'),
+                      ),
+                      ButtonSegment(
+                        value: UpstreamProxyType.http,
+                        label: Text('HTTP'),
+                      ),
+                    ],
+                    selected: {widget.proxySettings.upstreamType},
+                    onSelectionChanged: widget.routingLocked
+                        ? null
+                        : (next) {
+                            if (next.isEmpty) return;
+                            widget.onProxySettingsChanged(
+                              widget.proxySettings.copyWith(
+                                upstreamType: next.first,
+                              ),
+                            );
+                          },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    key: const Key('upstream_proxy_host_field'),
+                    controller: _upstreamHostController,
+                    enabled: !widget.routingLocked,
+                    keyboardType: TextInputType.url,
+                    decoration: InputDecoration(
+                      labelText: t.upstreamProxyHost,
+                      hintText: '192.168.50.51',
+                    ),
+                    onChanged: (value) => widget.onProxySettingsChanged(
+                      widget.proxySettings.copyWith(upstreamHost: value),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    key: const Key('upstream_proxy_port_field'),
+                    controller: _upstreamPortController,
+                    enabled: !widget.routingLocked,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: t.upstreamProxyPort,
+                    ),
+                    onChanged: (value) => widget.onProxySettingsChanged(
+                      widget.proxySettings.copyWith(
+                        upstreamPort: ProxySettings.portFromText(
+                          value,
+                          fallback: widget.proxySettings.upstreamPort,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (widget.proxySettings.upstreamHost.trim().isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        t.upstreamProxyNeedsHost,
+                        style: widget.textTheme.bodySmall?.copyWith(
+                          color: widget.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                ],
               ],
             ),
           ),

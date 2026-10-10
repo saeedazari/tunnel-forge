@@ -690,6 +690,29 @@ private class DirectSocketProxyTransportSession(
         }
     }
 
+    override fun readRemoteBytes(maxLen: Int, timeoutMs: Int): ByteArray? {
+        if (!connected.get()) throw IOException("TCP session is not connected.")
+        socket.soTimeout = timeoutMs.coerceAtLeast(1)
+        val buffer = ByteArray(maxLen)
+        return try {
+            val read = socket.getInputStream().read(buffer)
+            if (read < 0) ByteArray(0) else buffer.copyOf(read)
+        } catch (_: SocketTimeoutException) {
+            null
+        } finally {
+            socket.soTimeout = 0
+        }
+    }
+
+    override fun writeClientBytes(bytes: ByteArray, timeoutMs: Int): Int {
+        if (!connected.get()) throw IOException("TCP session is not connected.")
+        socket.getOutputStream().apply {
+            write(bytes)
+            flush()
+        }
+        return bytes.size
+    }
+
     override fun pumpBidirectional(client: ProxyClientConnection) {
         if (!connected.get()) {
             throw IOException("TCP session is not connected.")

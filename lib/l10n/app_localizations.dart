@@ -274,6 +274,23 @@ extension AppStrings on AppLocalizations {
     'HTTP and SOCKS5 ports must be different before connecting.',
     'درگاه‌های HTTP و SOCKS5 قبل از اتصال باید متفاوت باشند.',
   );
+  String get upstreamProxy =>
+      AppText.pick('Upstream proxy', 'پروکسی بالادستی');
+  String get upstreamProxyOn => AppText.pick(
+    'All proxied TCP traffic is chained through this proxy, reached via the VPN. Websites see the upstream proxy address. UDP is blocked while this is on.',
+    'تمام ترافیک TCP پروکسی از این پروکسی (از طریق وی‌پی‌ان) عبور می‌کند و وب‌سایت‌ها آدرس پروکسی بالادستی را می‌بینند. تا زمانی که روشن است UDP مسدود می‌شود.',
+  );
+  String get upstreamProxyOff => AppText.pick(
+    'Send traffic straight through the VPN.',
+    'ترافیک مستقیم از طریق وی‌پی‌ان ارسال می‌شود.',
+  );
+  String get upstreamProxyHost =>
+      AppText.pick('Proxy address', 'آدرس پروکسی');
+  String get upstreamProxyPort => AppText.pick('Proxy port', 'درگاه پروکسی');
+  String get upstreamProxyNeedsHost => AppText.pick(
+    'Enter the upstream proxy address, or it will be ignored.',
+    'آدرس پروکسی بالادستی را وارد کنید، وگرنه نادیده گرفته می‌شود.',
+  );
   String get proxyEndpoints =>
       AppText.pick('Proxy endpoints', 'نقطه‌های پایانی پروکسی');
   String get lanClientsCanUse => AppText.pick(
