@@ -546,9 +546,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
                     controller: _upstreamPortController,
                     enabled: !widget.routingLocked,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: t.upstreamProxyPort,
-                    ),
+                    decoration: InputDecoration(labelText: t.upstreamProxyPort),
                     onChanged: (value) => widget.onProxySettingsChanged(
                       widget.proxySettings.copyWith(
                         upstreamPort: ProxySettings.portFromText(
