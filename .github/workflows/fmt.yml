@@ -1,5 +1,7 @@
 ﻿name: Fmt
-on: workflow_dispatch
+on:
+  push:
+    branches: [feature/upstream-proxy]
 jobs:
   fmt:
     runs-on: ubuntu-latest
@@ -9,3 +11,4 @@ jobs:
         with:
           flutter-version: 3.41.2
       - run: dart format lib test && git diff
+
