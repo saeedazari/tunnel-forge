@@ -509,6 +509,10 @@ void main() {
       200,
       scrollable: settingsScrollView(),
     );
+    await tester.ensureVisible(
+      find.byKey(const Key('l2tp_security_notice_tile')),
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('l2tp_security_notice_tile')));
     await tester.pump();
 
@@ -566,6 +570,10 @@ void main() {
       250,
       scrollable: settingsScrollView(),
     );
+    await tester.ensureVisible(
+      find.byKey(const Key('settings_update_refresh_button')),
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('settings_update_refresh_button')));
     await tester.pumpAndSettle();
 
