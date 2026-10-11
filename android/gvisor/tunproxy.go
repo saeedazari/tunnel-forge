@@ -153,6 +153,11 @@ func tf_tunproxy_start(tunFd C.int, mtu C.int, socksPort C.int, dnsIPv4 unsafe.P
 		return -1
 	}
 
+	return C.int(startTunProxy(int(tunFd), int(mtu), int(socksPort), dns))
+}
+
+// startTunProxy is the cgo-free body of tf_tunproxy_start so tests can drive it with a socketpair.
+func startTunProxy(tunFd int, mtu int, socksPort int, dns []string) int {
 	tunProxyMu.Lock()
 	defer tunProxyMu.Unlock()
 	if tunProxyCurrent != nil {
@@ -165,7 +170,7 @@ func tf_tunproxy_start(tunFd C.int, mtu C.int, socksPort C.int, dnsIPv4 unsafe.P
 	tunProxyActiveTCP.Store(0)
 
 	// The Java side keeps its own descriptor; this duplicate is closed independently on stop.
-	dupFd, err := syscall.Dup(int(tunFd))
+	dupFd, err := syscall.Dup(tunFd)
 	if err != nil {
 		tunProxyFail("dup tun fd: %v", err)
 		return -2
@@ -209,7 +214,7 @@ func tf_tunproxy_start(tunFd C.int, mtu C.int, socksPort C.int, dnsIPv4 unsafe.P
 		stack:     s,
 		linkEP:    linkEP,
 		tun:       tun,
-		socksAddr: fmt.Sprintf("127.0.0.1:%d", int(socksPort)),
+		socksAddr: fmt.Sprintf("127.0.0.1:%d", socksPort),
 		dns:       dns,
 		pool:      newFakeIPPool(),
 	}
@@ -257,7 +262,7 @@ func tf_tunproxy_start(tunFd C.int, mtu C.int, socksPort C.int, dnsIPv4 unsafe.P
 	eng.wg.Add(2)
 	go func() {
 		defer eng.wg.Done()
-		eng.pumpTunToStack(ctx, int(mtu))
+		eng.pumpTunToStack(ctx, mtu)
 	}()
 	go func() {
 		defer eng.wg.Done()
