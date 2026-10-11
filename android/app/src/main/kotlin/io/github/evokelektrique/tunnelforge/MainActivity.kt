@@ -178,6 +178,7 @@ class MainActivity : FlutterActivity() {
                     val upstreamProxyType = args[VpnContract.ARG_UPSTREAM_PROXY_TYPE] as? String ?: ""
                     val upstreamProxyHost = (args[VpnContract.ARG_UPSTREAM_PROXY_HOST] as? String)?.trim().orEmpty()
                     val upstreamProxyPort = sanitizePort(args[VpnContract.ARG_UPSTREAM_PROXY_PORT], 0)
+                    val captureAllTraffic = args[VpnContract.ARG_CAPTURE_ALL_TRAFFIC] as? Boolean ?: false
                     if (upstreamProxyEnabled && (upstreamProxyHost.isEmpty() || upstreamProxyPort == 0)) {
                         AppLog.e(TAG, "vpn_call connect rejected bad_args (incomplete upstream proxy) attempt=$attemptId")
                         result.error("bad_args", "Upstream proxy needs a host and a valid port", null)
@@ -200,7 +201,7 @@ class MainActivity : FlutterActivity() {
                     if (hasPort) {
                         AppLog.w(TAG, "vpn_call connect server includes port; expected host only attempt=$attemptId server=$serverTrim")
                     }
-                    if (connectionMode == VpnContract.MODE_VPN_TUNNEL) {
+                    if (connectionMode == VpnContract.MODE_VPN_TUNNEL || (connectionMode == VpnContract.MODE_PROXY_ONLY && captureAllTraffic)) {
                         val prep = VpnService.prepare(this)
                         if (prep != null) {
                             AppLog.e(TAG, "vpn_call connect rejected vpn_permission attempt=$attemptId")
@@ -239,6 +240,7 @@ class MainActivity : FlutterActivity() {
                                 putExtra(ProxyTunnelService.EXTRA_UPSTREAM_PROXY_TYPE, upstreamProxyType)
                                 putExtra(ProxyTunnelService.EXTRA_UPSTREAM_PROXY_HOST, upstreamProxyHost)
                                 putExtra(ProxyTunnelService.EXTRA_UPSTREAM_PROXY_PORT, upstreamProxyPort)
+                                putExtra(ProxyTunnelService.EXTRA_CAPTURE_ALL_TRAFFIC, captureAllTraffic)
                             }
                         } else {
                             Intent(this, TunnelVpnService::class.java).apply {

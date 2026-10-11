@@ -289,6 +289,20 @@ extension AppStrings on AppLocalizations {
     'Enter the upstream proxy address, or it will be ignored.',
     'آدرس پروکسی بالادستی را وارد کنید، وگرنه نادیده گرفته می‌شود.',
   );
+  String get captureAllTraffic =>
+      AppText.pick('Route the whole device', 'عبور کل ترافیک دستگاه');
+  String get captureAllTrafficOn => AppText.pick(
+    'Every app is sent through the proxy automatically, so no separate app is needed. This app is excluded from the capture. IPv6 and non-DNS UDP are blocked.',
+    'همه برنامه‌ها خودکار از پروکسی عبور می‌کنند و نیازی به برنامه دیگری نیست. خود این برنامه از این مسیر مستثنی است. IPv6 و UDP غیر از DNS مسدود می‌شود.',
+  );
+  String get captureAllTrafficOff => AppText.pick(
+    'Only apps that you point at the local proxy use it.',
+    'فقط برنامه‌هایی که روی پروکسی محلی تنظیم شده باشند از آن استفاده می‌کنند.',
+  );
+  String get captureAllTrafficNeedsProxyMode => AppText.pick(
+    'Available in local proxy mode only.',
+    'فقط در حالت پروکسی محلی در دسترس است.',
+  );
   String get proxyEndpoints =>
       AppText.pick('Proxy endpoints', 'نقطه‌های پایانی پروکسی');
   String get lanClientsCanUse => AppText.pick(

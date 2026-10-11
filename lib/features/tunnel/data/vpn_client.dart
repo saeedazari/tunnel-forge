@@ -252,6 +252,7 @@ class VpnClient {
         fallback: ProxySettings.defaultSocksPort,
       ),
       VpnContract.argProxyAllowLan: proxySettings.allowLanConnections,
+      VpnContract.argCaptureAllTraffic: proxySettings.captureAllTraffic,
       VpnContract.argUpstreamProxyEnabled: proxySettings.upstreamUsable,
       VpnContract.argUpstreamProxyType: proxySettings.upstreamType.jsonValue,
       VpnContract.argUpstreamProxyHost: proxySettings.upstreamHost.trim(),

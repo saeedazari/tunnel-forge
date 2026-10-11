@@ -267,7 +267,8 @@ val androidGoAbis =
 tasks.register("buildAndroidGoNative") {
     group = "build"
     description = "Builds the Android Go native shared library for Android ABIs."
-    inputs.files(androidGoModuleDir.resolve("go.mod"), androidGoModuleDir.resolve("go.sum"), androidGoModuleDir.resolve("main.go"))
+    inputs.files(androidGoModuleDir.resolve("go.mod"), androidGoModuleDir.resolve("go.sum"))
+    inputs.files(fileTree(androidGoModuleDir) { include("*.go") })
     outputs.dirs(androidGoAbis.map { androidGoJniLibsDir.get().asFile.resolve(it.abi) })
     doLast {
         if (!androidGoModuleDir.resolve("go.mod").isFile) {

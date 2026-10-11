@@ -182,6 +182,7 @@ class ProxySettings {
     this.upstreamType = UpstreamProxyType.socks5,
     this.upstreamHost = '',
     this.upstreamPort = defaultUpstreamPort,
+    this.captureAllTraffic = false,
   });
 
   static const int defaultUpstreamPort = 1080;
@@ -198,6 +199,9 @@ class ProxySettings {
   final UpstreamProxyType upstreamType;
   final String upstreamHost;
   final int upstreamPort;
+
+  /// Proxy-only mode: route every app on the device through the local proxy.
+  final bool captureAllTraffic;
 
   /// True when chaining is on and the endpoint is complete enough to use.
   bool get upstreamUsable => upstreamEnabled && upstreamHost.trim().isNotEmpty;
@@ -221,6 +225,7 @@ class ProxySettings {
     UpstreamProxyType? upstreamType,
     String? upstreamHost,
     int? upstreamPort,
+    bool? captureAllTraffic,
   }) {
     return ProxySettings(
       httpPort: httpPort ?? this.httpPort,
@@ -230,6 +235,7 @@ class ProxySettings {
       upstreamType: upstreamType ?? this.upstreamType,
       upstreamHost: upstreamHost ?? this.upstreamHost,
       upstreamPort: upstreamPort ?? this.upstreamPort,
+      captureAllTraffic: captureAllTraffic ?? this.captureAllTraffic,
     );
   }
 }

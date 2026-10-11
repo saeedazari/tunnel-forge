@@ -21,6 +21,10 @@ typedef void (*tf_gvisor_tcp_close_fn)(int session_id);
 typedef int (*tf_gvisor_stats_fn)(int *out, int count);
 typedef int (*tf_gvisor_last_open_diagnostics_fn)(char *out, int count);
 typedef int (*tf_gvisor_open_diagnostics_fn)(int open_id, char *out, int count);
+typedef int (*tf_tunproxy_start_fn)(int tun_fd, int mtu, int socks_port, const uint8_t *dns_ipv4);
+typedef void (*tf_tunproxy_stop_fn)(void);
+typedef int (*tf_tunproxy_stats_fn)(int *out, int count);
+typedef int (*tf_tunproxy_last_error_fn)(char *out, int count);
 
 static struct {
   void *handle;
@@ -37,6 +41,10 @@ static struct {
   tf_gvisor_stats_fn stats;
   tf_gvisor_last_open_diagnostics_fn last_open_diagnostics;
   tf_gvisor_open_diagnostics_fn open_diagnostics;
+  tf_tunproxy_start_fn tunproxy_start;
+  tf_tunproxy_stop_fn tunproxy_stop;
+  tf_tunproxy_stats_fn tunproxy_stats;
+  tf_tunproxy_last_error_fn tunproxy_last_error;
 } g_gvisor;
 
 static int load_symbol(void **target, const char *name) {
@@ -70,7 +78,11 @@ static int ensure_loaded(void) {
       load_symbol((void **)&g_gvisor.tcp_close, "tf_gvisor_tcp_close") != 0 ||
       load_symbol((void **)&g_gvisor.stats, "tf_gvisor_stats") != 0 ||
       load_symbol((void **)&g_gvisor.last_open_diagnostics, "tf_gvisor_last_open_diagnostics") != 0 ||
-      load_symbol((void **)&g_gvisor.open_diagnostics, "tf_gvisor_open_diagnostics") != 0) {
+      load_symbol((void **)&g_gvisor.open_diagnostics, "tf_gvisor_open_diagnostics") != 0 ||
+      load_symbol((void **)&g_gvisor.tunproxy_start, "tf_tunproxy_start") != 0 ||
+      load_symbol((void **)&g_gvisor.tunproxy_stop, "tf_tunproxy_stop") != 0 ||
+      load_symbol((void **)&g_gvisor.tunproxy_stats, "tf_tunproxy_stats") != 0 ||
+      load_symbol((void **)&g_gvisor.tunproxy_last_error, "tf_tunproxy_last_error") != 0) {
     dlclose(g_gvisor.handle);
     memset(&g_gvisor, 0, sizeof(g_gvisor));
     errno = ENOSYS;
@@ -153,4 +165,27 @@ int gvisor_bridge_open_diagnostics(int open_id, char *out, size_t count) {
   if (ensure_loaded() != 0 || out == NULL || count == 0 || count > INT32_MAX || open_id <= 0)
     return -1;
   return g_gvisor.open_diagnostics(open_id, out, (int)count);
+}
+
+int gvisor_bridge_tunproxy_start(int tun_fd, int mtu, int socks_port, const uint8_t dns_ipv4[8]) {
+  if (ensure_loaded() != 0 || dns_ipv4 == NULL)
+    return -1;
+  return g_gvisor.tunproxy_start(tun_fd, mtu, socks_port, dns_ipv4);
+}
+
+void gvisor_bridge_tunproxy_stop(void) {
+  if (ensure_loaded() == 0)
+    g_gvisor.tunproxy_stop();
+}
+
+int gvisor_bridge_tunproxy_stats(int *out, int count) {
+  if (ensure_loaded() != 0 || out == NULL)
+    return -1;
+  return g_gvisor.tunproxy_stats(out, count);
+}
+
+int gvisor_bridge_tunproxy_last_error(char *out, size_t count) {
+  if (ensure_loaded() != 0 || out == NULL || count == 0 || count > INT32_MAX)
+    return -1;
+  return g_gvisor.tunproxy_last_error(out, (int)count);
 }

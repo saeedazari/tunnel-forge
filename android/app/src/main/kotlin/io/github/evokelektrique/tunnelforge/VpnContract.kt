@@ -42,6 +42,7 @@ object VpnContract {
     const val ARG_UPSTREAM_PROXY_TYPE = "upstreamProxyType"
     const val ARG_UPSTREAM_PROXY_HOST = "upstreamProxyHost"
     const val ARG_UPSTREAM_PROXY_PORT = "upstreamProxyPort"
+    const val ARG_CAPTURE_ALL_TRAFFIC = "captureAllTraffic"
     const val ARG_SPLIT_TUNNEL_ENABLED = "splitTunnelEnabled"
     const val ARG_SPLIT_TUNNEL_MODE = "splitTunnelMode"
     const val ARG_SPLIT_TUNNEL_INCLUSIVE_PACKAGES = "splitTunnelInclusivePackages"

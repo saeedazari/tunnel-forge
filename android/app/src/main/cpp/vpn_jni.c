@@ -11,6 +11,7 @@
 #define LOG_TAG "tunnel_engine"
 #define VPN_BRIDGE_CLASS "io/github/evokelektrique/tunnelforge/VpnBridge"
 #define GVISOR_STATS_COUNT 17
+#define TUNPROXY_STATS_COUNT 9
 
 static void throw_io_exception(JNIEnv *env, const char *message) {
   jclass clazz = (*env)->FindClass(env, "java/io/IOException");
@@ -283,6 +284,48 @@ static jintArray native_gvisor_stats(JNIEnv *env, jclass clazz) {
   return out;
 }
 
+static jint native_tunproxy_start(JNIEnv *env, jclass clazz, jint tun_fd, jint mtu, jint socks_port, jintArray jdns) {
+  (void)clazz;
+  if (jdns == NULL || (*env)->GetArrayLength(env, jdns) < 8)
+    return -1;
+  jint tmp[8];
+  (*env)->GetIntArrayRegion(env, jdns, 0, 8, tmp);
+  uint8_t dns[8];
+  for (int i = 0; i < 8; i++) {
+    if (tmp[i] < 0 || tmp[i] > 255)
+      return -1;
+    dns[i] = (uint8_t)tmp[i];
+  }
+  return (jint)gvisor_bridge_tunproxy_start((int)tun_fd, (int)mtu, (int)socks_port, dns);
+}
+
+static void native_tunproxy_stop(JNIEnv *env, jclass clazz) {
+  (void)env;
+  (void)clazz;
+  gvisor_bridge_tunproxy_stop();
+}
+
+static jintArray native_tunproxy_stats(JNIEnv *env, jclass clazz) {
+  (void)clazz;
+  int stats[TUNPROXY_STATS_COUNT] = {0};
+  gvisor_bridge_tunproxy_stats(stats, TUNPROXY_STATS_COUNT);
+  jintArray out = (*env)->NewIntArray(env, TUNPROXY_STATS_COUNT);
+  if (out == NULL)
+    return NULL;
+  (*env)->SetIntArrayRegion(env, out, 0, TUNPROXY_STATS_COUNT, stats);
+  return out;
+}
+
+static jstring native_tunproxy_last_error(JNIEnv *env, jclass clazz) {
+  (void)clazz;
+  char buf[256];
+  int n = gvisor_bridge_tunproxy_last_error(buf, sizeof(buf));
+  if (n <= 0)
+    return (*env)->NewStringUTF(env, "");
+  buf[sizeof(buf) - 1u] = ' ';
+  return (*env)->NewStringUTF(env, buf);
+}
+
 static jstring native_gvisor_last_open_diagnostics(JNIEnv *env, jclass clazz) {
   (void)clazz;
   char buf[512];
@@ -425,6 +468,10 @@ static int register_vpn_bridge(JNIEnv *env) {
       {"nativeSetVpnDnsInterceptIpv4", "(Ljava/lang/String;)I", (void *)native_set_vpn_dns_intercept_ipv4},
       {"nativeReadVpnDnsQuery", "(I)[B", (void *)native_read_vpn_dns_query},
       {"nativeQueueVpnDnsResponse", "([B)I", (void *)native_queue_vpn_dns_response},
+      {"nativeTunProxyStart", "(III[I)I", (void *)native_tunproxy_start},
+      {"nativeTunProxyStop", "()V", (void *)native_tunproxy_stop},
+      {"nativeTunProxyStats", "()[I", (void *)native_tunproxy_stats},
+      {"nativeTunProxyLastError", "()Ljava/lang/String;", (void *)native_tunproxy_last_error},
       {"nativeStopTunnel", "()V", (void *)native_stop_tunnel},
   };
   jclass bridge_class = (*env)->FindClass(env, VPN_BRIDGE_CLASS);

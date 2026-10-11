@@ -109,6 +109,7 @@ class ProxyTunnelService : Service() {
                         socksPort = socksPort,
                         allowLanConnections = allowLanConnections,
                         upstreamProxy = TunnelVpnService.upstreamProxyFromIntent(intent),
+                        captureAllTraffic = intent.getBooleanExtra(EXTRA_CAPTURE_ALL_TRAFFIC, false),
                     )
                 shutdownActiveSession(reason = "restart")
                 connectedEmitted = false
@@ -467,6 +468,17 @@ class ProxyTunnelService : Service() {
                 changedPortNotice
                     ?: "gVisor TCP stack active. ${runtime.endpointSummary()}. Hostnames resolve before tunneled connect; IPv6 destinations are still unsupported.",
             )
+            if (effectiveProxyConfig.captureAllTraffic) {
+                try {
+                    TunProxyService.start(this, effectiveProxyConfig.socksPort, dnsServers)
+                } catch (e: Exception) {
+                    VpnTunnelEvents.emitEngineLog(
+                        Log.ERROR,
+                        TAG,
+                        "${prefixAttempt(attemptId)}Whole-device capture could not start: ${e.message ?: e.javaClass.simpleName}",
+                    )
+                }
+            }
             loopThread.join()
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -496,6 +508,7 @@ class ProxyTunnelService : Service() {
              * Tear down consumers before producers: stop listeners, stop packet pumps/bridge,
              * stop gVisor, then release the native tunnel owner.
              */
+            TunProxyService.stopActive("proxy worker cleanup")
             localRuntime?.stop()
             localGvisorOutboundThread?.interrupt()
             localGvisorInboundThread?.interrupt()
@@ -582,6 +595,7 @@ class ProxyTunnelService : Service() {
             return false
         }
         VpnTunnelEvents.emitEngineLog(Log.DEBUG, TAG, "Stopping previous proxy session reason=$reason")
+        TunProxyService.stopActive("proxy session stop: $reason")
         active.runtime?.stop()
         if (config != null) {
             VpnTunnelEvents.emitProxyExposureChanged(
@@ -861,6 +875,7 @@ class ProxyTunnelService : Service() {
         const val EXTRA_UPSTREAM_PROXY_TYPE = "upstreamProxyType"
         const val EXTRA_UPSTREAM_PROXY_HOST = "upstreamProxyHost"
         const val EXTRA_UPSTREAM_PROXY_PORT = "upstreamProxyPort"
+        const val EXTRA_CAPTURE_ALL_TRAFFIC = "captureAllTraffic"
         const val DEFAULT_HTTP_PORT = 8080
         const val DEFAULT_SOCKS_PORT = 1080
         const val DEFAULT_LINK_MTU = TunnelVpnService.DEFAULT_TUN_MTU

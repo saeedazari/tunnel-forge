@@ -301,7 +301,7 @@ class TunnelBloc extends Bloc<TunnelEvent, TunnelState> {
     );
 
     try {
-      if (!proxyMode) {
+      if (!proxyMode || request.proxySettings.captureAllTraffic) {
         _logDebug(
           'Requesting VPN permission (if needed)... attempt=$attemptId',
           tag: 'tunnel',

@@ -98,5 +98,9 @@ object VpnBridge {
     external fun nativeQueueVpnDnsResponse(packet: ByteArray): Int
 
     @JvmStatic
+    external fun nativeTunProxyStart(tunFd: Int, mtu: Int, socksPort: Int, dnsIpv4: IntArray): Int
+    external fun nativeTunProxyStop()
+    external fun nativeTunProxyStats(): IntArray
+    external fun nativeTunProxyLastError(): String
     external fun nativeStopTunnel()
 }

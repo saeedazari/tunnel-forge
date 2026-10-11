@@ -567,6 +567,29 @@ class _SettingsPanelState extends State<SettingsPanel> {
                       ),
                     ),
                 ],
+                SwitchListTile(
+                  key: const Key('capture_all_traffic_switch'),
+                  contentPadding: EdgeInsets.zero,
+                  title: _cardTitle(t.captureAllTraffic),
+                  subtitle: _cardText(
+                    widget.connectionMode != ConnectionMode.proxyOnly
+                        ? t.captureAllTrafficNeedsProxyMode
+                        : widget.proxySettings.captureAllTraffic
+                        ? t.captureAllTrafficOn
+                        : t.captureAllTrafficOff,
+                    color: widget.colorScheme.onSurfaceVariant,
+                  ),
+                  value: widget.proxySettings.captureAllTraffic,
+                  onChanged:
+                      widget.routingLocked ||
+                          widget.connectionMode != ConnectionMode.proxyOnly
+                      ? null
+                      : (value) => widget.onProxySettingsChanged(
+                          widget.proxySettings.copyWith(
+                            captureAllTraffic: value,
+                          ),
+                        ),
+                ),
               ],
             ),
           ),

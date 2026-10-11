@@ -39,6 +39,7 @@ data class ProxyRuntimeConfig(
     val maxConcurrentClients: Int? = ProxyServerRuntime.DEFAULT_MAX_CONCURRENT_CLIENTS,
     val suppressUpstreamHttpErrors: Boolean = false,
     val upstreamProxy: UpstreamProxyConfig? = null,
+    val captureAllTraffic: Boolean = false,
     val exposure: ProxyExposureInfo =
         ProxyExposureInfo.loopback(
             httpPort = httpPort,

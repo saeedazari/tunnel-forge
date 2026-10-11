@@ -31,4 +31,14 @@ int gvisor_bridge_stats(int *out, int count);
 int gvisor_bridge_last_open_diagnostics(char *out, size_t count);
 int gvisor_bridge_open_diagnostics(int open_id, char *out, size_t count);
 
+/*
+ * Whole-device capture (proxy-only mode). The Go side owns a duplicate of the Android TUN fd and
+ * forwards every TCP flow to the local SOCKS5 listener on 127.0.0.1:socks_port; DNS (UDP/53) is
+ * tunnelled over TCP to dns_ipv4 (two packed IPv4 addresses, 0.0.0.0 = unused).
+ */
+int gvisor_bridge_tunproxy_start(int tun_fd, int mtu, int socks_port, const uint8_t dns_ipv4[8]);
+void gvisor_bridge_tunproxy_stop(void);
+int gvisor_bridge_tunproxy_stats(int *out, int count);
+int gvisor_bridge_tunproxy_last_error(char *out, size_t count);
+
 #endif

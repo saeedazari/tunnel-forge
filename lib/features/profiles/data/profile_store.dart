@@ -66,6 +66,7 @@ class ProfileStore {
   static const prefsKeyUpstreamType = 'proxy_upstream_type_v1';
   static const prefsKeyUpstreamHost = 'proxy_upstream_host_v1';
   static const prefsKeyUpstreamPort = 'proxy_upstream_port_v1';
+  static const prefsKeyCaptureAllTraffic = 'proxy_capture_all_traffic_v1';
   static const prefsKeySplitTunnelEnabled = 'split_tunnel_enabled_v1';
   static const prefsKeySplitTunnelMode = 'split_tunnel_mode_v1';
   static const prefsKeySplitTunnelInclusivePackages =
@@ -156,6 +157,7 @@ class ProfileStore {
       upstreamType: UpstreamProxyType.fromJson(
         p.getString(prefsKeyUpstreamType),
       ),
+      captureAllTraffic: p.getBool(prefsKeyCaptureAllTraffic) ?? false,
       upstreamHost: p.getString(prefsKeyUpstreamHost) ?? '',
       upstreamPort: ProxySettings.normalizePort(
         p.getInt(prefsKeyUpstreamPort) ?? ProxySettings.defaultUpstreamPort,
@@ -185,6 +187,7 @@ class ProfileStore {
       settings.allowLanConnections,
     );
     await p.setBool(prefsKeyUpstreamEnabled, settings.upstreamEnabled);
+    await p.setBool(prefsKeyCaptureAllTraffic, settings.captureAllTraffic);
     await p.setString(prefsKeyUpstreamType, settings.upstreamType.jsonValue);
     await p.setString(prefsKeyUpstreamHost, settings.upstreamHost.trim());
     await p.setInt(

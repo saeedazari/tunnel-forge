@@ -47,6 +47,7 @@ abstract final class VpnContract {
   static const String argUpstreamProxyType = 'upstreamProxyType';
   static const String argUpstreamProxyHost = 'upstreamProxyHost';
   static const String argUpstreamProxyPort = 'upstreamProxyPort';
+  static const String argCaptureAllTraffic = 'captureAllTraffic';
   static const String argSplitTunnelEnabled = 'splitTunnelEnabled';
   static const String argSplitTunnelMode = 'splitTunnelMode';
   static const String argSplitTunnelInclusivePackages =

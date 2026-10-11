@@ -239,6 +239,14 @@ void main() {
       expect(proxy.upstreamHost, '192.168.50.51');
       expect(proxy.upstreamPort, 18888);
       expect(proxy.upstreamUsable, isTrue);
+      expect(proxy.captureAllTraffic, isFalse);
+    });
+
+    test('persists whole-device capture flag', () async {
+      await store.saveProxySettings(
+        const ProxySettings(captureAllTraffic: true),
+      );
+      expect((await store.loadProxySettings()).captureAllTraffic, isTrue);
     });
 
     test('upstream proxy is unusable without a host', () {
