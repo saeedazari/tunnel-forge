@@ -185,7 +185,6 @@ func startTunProxy(tunFd int, mtu int, socksPort int, dns []string) int {
 	s := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol},
-		HandleLocal:        true,
 	})
 	linkEP := channel.New(1024, uint32(mtu), "")
 	if terr := s.CreateNIC(tunProxyNIC, linkEP); terr != nil {
