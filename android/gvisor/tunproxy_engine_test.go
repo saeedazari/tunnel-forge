@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"syscall"
 	"testing"
@@ -118,6 +120,7 @@ func readPacket(t *testing.T, f *os.File, match func([]byte) bool) []byte {
 			return append([]byte(nil), buf[:n]...)
 		}
 	}
+	t.Logf("engine state: %s", engineDiagnostics())
 	t.Fatal("timed out waiting for a matching packet from the engine")
 	return nil
 }
@@ -188,6 +191,7 @@ func TestEngineDropsIPv6AndNonDNSUDP(t *testing.T) {
 	_, _ = tun.Write([]byte{0x60, 0, 0, 0, 0, 0, 59, 64})
 	time.Sleep(300 * time.Millisecond)
 	if tunProxyUDPDrop.Load() == 0 {
+		t.Logf("engine state: %s", engineDiagnostics())
 		t.Fatal("non-DNS UDP should be counted as dropped")
 	}
 	// The engine still answers DNS afterwards.
@@ -195,4 +199,40 @@ func TestEngineDropsIPv6AndNonDNSUDP(t *testing.T) {
 		t.Fatal(err)
 	}
 	readPacket(t, tun, func(p []byte) bool { return p[9] == 17 && binary.BigEndian.Uint16(p[22:]) == 40002 })
+}
+
+// engineDiagnostics lists every non-zero netstack counter plus the engine counters, so a failing
+// run shows where a packet was discarded.
+func engineDiagnostics() string {
+	out := []string{
+		fmt.Sprintf("pktIn=%d pktOut=%d udpDrop=%d dnsOK=%d dnsFailed=%d", tunProxyPktIn.Load(), tunProxyPktOut.Load(), tunProxyUDPDrop.Load(), tunProxyDNSOK.Load(), tunProxyDNSFailed.Load()),
+		fmt.Sprintf("lastErr=%v", tunProxyLastErr.Load()),
+	}
+	if eng := tunProxyCurrent; eng != nil {
+		stats := eng.stack.Stats()
+		walkStats(reflect.ValueOf(stats), "", &out)
+	}
+	return fmt.Sprintf("%v", out)
+}
+
+func walkStats(v reflect.Value, prefix string, out *[]string) {
+	v = reflect.Indirect(v)
+	if v.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		name := prefix + v.Type().Field(i).Name
+		if f.Kind() == reflect.Ptr && !f.IsNil() {
+			if m := f.MethodByName("Value"); m.IsValid() && m.Type().NumIn() == 0 {
+				if n := m.Call(nil)[0]; n.Kind() == reflect.Uint64 && n.Uint() > 0 {
+					*out = append(*out, fmt.Sprintf("%s=%d", name, n.Uint()))
+				}
+				continue
+			}
+		}
+		if f.CanInterface() {
+			walkStats(f, name+".", out)
+		}
+	}
 }
