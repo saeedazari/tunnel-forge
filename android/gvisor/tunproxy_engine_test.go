@@ -179,6 +179,7 @@ func TestEngineAnswersDNSWithFakeIPThenProxiesTCPByDomain(t *testing.T) {
 			t.Fatalf("SOCKS destination = %q", dest)
 		}
 	case <-time.After(5 * time.Second):
+		t.Logf("engine state: %s", engineDiagnostics())
 		t.Fatal("engine never contacted the SOCKS5 listener")
 	}
 }

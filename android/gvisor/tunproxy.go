@@ -388,6 +388,7 @@ func (e *tunProxyEngine) serveTCP(ctx context.Context, client *gonet.TCPConn, ds
 		if domain == "" {
 			// Reserved block with no name behind it (TUN address, stale fake IP): refuse quickly.
 			tunProxyTCPFailed.Add(1)
+			tunProxyFail("tcp %s:%d: reserved address without a name", dst, dport)
 			return
 		}
 		remote, err = socksConnectHost(ctx, e.socksAddr, domain, dport)
