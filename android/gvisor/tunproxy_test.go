@@ -169,3 +169,105 @@ func TestResolveOverSocksRejectsShortQuery(t *testing.T) {
 		t.Fatal("expected short query to be rejected")
 	}
 }
+
+func dnsQuery(name string, qtype uint16) []byte {
+	q := []byte{0x12, 0x34, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0}
+	start := 0
+	for i := 0; i <= len(name); i++ {
+		if i == len(name) || name[i] == '.' {
+			q = append(q, byte(i-start))
+			q = append(q, name[start:i]...)
+			start = i + 1
+		}
+	}
+	q = append(q, 0, byte(qtype>>8), byte(qtype), 0, 1)
+	return q
+}
+
+func TestParseDNSQuestion(t *testing.T) {
+	name, qtype, qclass, end, ok := parseDNSQuestion(dnsQuery("WWW.Example.com", 1))
+	if !ok || name != "www.example.com" || qtype != 1 || qclass != 1 || end != len(dnsQuery("www.example.com", 1)) {
+		t.Fatalf("got %q %d %d %d %v", name, qtype, qclass, end, ok)
+	}
+	if _, _, _, _, ok := parseDNSQuestion([]byte{1, 2, 3}); ok {
+		t.Fatal("short packet accepted")
+	}
+	bad := dnsQuery("a.com", 1)
+	bad[12] = 0xC0 // compression pointer in question
+	if _, _, _, _, ok := parseDNSQuestion(bad); ok {
+		t.Fatal("compressed question accepted")
+	}
+}
+
+func TestAnswerDNSFakeIPForAAndEmptyForAAAA(t *testing.T) {
+	eng := &tunProxyEngine{pool: newFakeIPPool()}
+	resp, err := eng.answerDNS(context.Background(), dnsQuery("example.com", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp[0] != 0x12 || resp[1] != 0x34 || resp[2]&0x80 == 0 || resp[7] != 1 {
+		t.Fatalf("bad A response header % x", resp[:12])
+	}
+	ip := net.IP(resp[len(resp)-4:])
+	domain, inRange := eng.pool.lookup(ip)
+	if !inRange || domain != "example.com" {
+		t.Fatalf("lookup(%s) = %q %v", ip, domain, inRange)
+	}
+	again, _ := eng.answerDNS(context.Background(), dnsQuery("EXAMPLE.com", 1))
+	if !net.IP(again[len(again)-4:]).Equal(ip) {
+		t.Fatal("same domain must keep its fake address")
+	}
+	empty, err := eng.answerDNS(context.Background(), dnsQuery("example.com", 28))
+	if err != nil || empty[7] != 0 || empty[3]&0x0f != 0 {
+		t.Fatalf("AAAA must be an empty NOERROR: % x err=%v", empty, err)
+	}
+}
+
+func TestFakeIPPoolRecyclesOldestAndRefusesUnknown(t *testing.T) {
+	p := newFakeIPPool()
+	first := p.alloc("first.test")
+	for i := 1; i < fakePoolSize; i++ {
+		p.alloc(strconv.Itoa(i) + ".test")
+	}
+	p.alloc("overflow.test") // wraps onto first's slot
+	if d, _ := p.lookup(first); d != "overflow.test" {
+		t.Fatalf("slot not recycled: %q", d)
+	}
+	if d, inRange := p.lookup(net.ParseIP("198.18.0.2")); d != "" || !inRange {
+		t.Fatal("TUN block must be reserved and have no domain")
+	}
+	if _, inRange := p.lookup(net.ParseIP("93.184.216.34")); inRange {
+		t.Fatal("public address must not be treated as fake")
+	}
+}
+
+func TestSocksConnectHostSendsDomain(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	got := make(chan []byte, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		_, _ = io.ReadFull(c, make([]byte, 3))
+		_, _ = c.Write([]byte{5, 0})
+		req := make([]byte, 5+len("example.com")+2)
+		_, _ = io.ReadFull(c, req)
+		got <- req
+		_, _ = c.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0})
+	}()
+	conn, err := socksConnectHost(context.Background(), ln.Addr().String(), "example.com", 8443)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Close()
+	req := <-got
+	if req[3] != 3 || req[4] != byte(len("example.com")) || string(req[5:16]) != "example.com" || req[16] != 0x20 || req[17] != 0xfb {
+		t.Fatalf("request = % x", req)
+	}
+}

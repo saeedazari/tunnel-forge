@@ -7,9 +7,11 @@ import "C"
 // The Android TUN fd (from TunProxyService) is attached to its own gVisor netstack that accepts
 // every TCP flow regardless of destination. Each accepted flow is forwarded to the local SOCKS5
 // listener (which is chained to the upstream proxy through the L2TP tunnel), so the apps on the
-// phone never need to know about the proxy. DNS over UDP is answered by tunnelling the query over
-// TCP through the same SOCKS5 listener. All other UDP and all IPv6 is dropped on purpose: letting it
-// escape would leak the real address.
+// phone never need to know about the proxy. DNS uses fake IPs: an A query is answered with an address
+// from a private pool, and when the app connects to that address the original host name is handed to
+// the SOCKS5 listener, so the upstream proxy does the real resolution (nothing resolves locally).
+// AAAA and other record types get an empty answer. All other UDP and all IPv6 is dropped on
+// purpose: letting it escape would leak the real address.
 
 import (
 	"context"
@@ -47,7 +49,63 @@ const (
 	tunProxyCopyBufBytes = 16 * 1024
 )
 
+// Fake-IP pool: 198.18.1.0 - 198.18.255.255. 198.18.0.0/24 is reserved for the TUN itself.
+const (
+	fakePoolBase = uint32(198)<<24 | uint32(18)<<16 | 1<<8
+	fakePoolSize = 255 * 256
+)
+
+type fakeIPPool struct {
+	mu       sync.Mutex
+	byDomain map[string]int
+	domains  []string
+	next     int
+}
+
+func newFakeIPPool() *fakeIPPool {
+	return &fakeIPPool{byDomain: make(map[string]int), domains: make([]string, fakePoolSize)}
+}
+
+func fakeIPFromIndex(i int) net.IP {
+	v := fakePoolBase + uint32(i)
+	return net.IPv4(byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+}
+
+// alloc returns a stable fake address for domain, recycling the oldest slot when the pool wraps.
+func (p *fakeIPPool) alloc(domain string) net.IP {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if i, ok := p.byDomain[domain]; ok {
+		return fakeIPFromIndex(i)
+	}
+	i := p.next
+	p.next = (p.next + 1) % fakePoolSize
+	if old := p.domains[i]; old != "" {
+		delete(p.byDomain, old)
+	}
+	p.domains[i] = domain
+	p.byDomain[domain] = i
+	return fakeIPFromIndex(i)
+}
+
+// lookup maps a fake address back to its domain. inRange reports whether ip belongs to the
+// reserved 198.18.0.0/15 block at all (so stale fake addresses can be refused instead of proxied).
+func (p *fakeIPPool) lookup(ip net.IP) (domain string, inRange bool) {
+	v4 := ip.To4()
+	if v4 == nil || v4[0] != 198 || (v4[1] != 18 && v4[1] != 19) {
+		return "", false
+	}
+	v := uint32(v4[0])<<24 | uint32(v4[1])<<16 | uint32(v4[2])<<8 | uint32(v4[3])
+	if v < fakePoolBase || v-fakePoolBase >= fakePoolSize {
+		return "", true
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.domains[v-fakePoolBase], true
+}
+
 type tunProxyEngine struct {
+	pool      *fakeIPPool
 	cancel    context.CancelFunc
 	stack     *stack.Stack
 	linkEP    *channel.Endpoint
@@ -153,6 +211,7 @@ func tf_tunproxy_start(tunFd C.int, mtu C.int, socksPort C.int, dnsIPv4 unsafe.P
 		tun:       tun,
 		socksAddr: fmt.Sprintf("127.0.0.1:%d", int(socksPort)),
 		dns:       dns,
+		pool:      newFakeIPPool(),
 	}
 
 	tcpFwd := tcp.NewForwarder(s, 0, tunProxyMaxInFlight, func(r *tcp.ForwarderRequest) {
@@ -319,7 +378,18 @@ func (e *tunProxyEngine) serveTCP(ctx context.Context, client *gonet.TCPConn, ds
 	defer tunProxyActiveTCP.Add(-1)
 	defer client.Close()
 
-	remote, err := socksConnect(ctx, e.socksAddr, dst, dport)
+	var remote net.Conn
+	var err error
+	if domain, inRange := e.pool.lookup(dst); inRange {
+		if domain == "" {
+			// Reserved block with no name behind it (TUN address, stale fake IP): refuse quickly.
+			tunProxyTCPFailed.Add(1)
+			return
+		}
+		remote, err = socksConnectHost(ctx, e.socksAddr, domain, dport)
+	} else {
+		remote, err = socksConnect(ctx, e.socksAddr, dst, dport)
+	}
 	if err != nil {
 		tunProxyTCPFailed.Add(1)
 		tunProxyFail("tcp %s:%d: %v", dst, dport, err)
@@ -360,7 +430,7 @@ func (e *tunProxyEngine) serveDNS(ctx context.Context, conn *gonet.UDPConn) {
 		if err != nil || n == 0 {
 			return
 		}
-		resp, err := e.resolveOverSocks(ctx, buf[:n])
+		resp, err := e.answerDNS(ctx, buf[:n])
 		if err != nil {
 			tunProxyDNSFailed.Add(1)
 			tunProxyFail("dns: %v", err)
@@ -371,6 +441,91 @@ func (e *tunProxyEngine) serveDNS(ctx context.Context, conn *gonet.UDPConn) {
 			return
 		}
 	}
+}
+
+const (
+	dnsTypeA     = 1
+	dnsTypeNS    = 2
+	dnsTypeMX    = 15
+	dnsTypeTXT   = 16
+	dnsTypeSRV   = 33
+	dnsClassIN   = 1
+	fakeIPTTLSec = 60
+)
+
+// answerDNS replies to A queries with a fake address and to most other types with an empty
+// NOERROR answer. Record types that carry no addresses (MX/TXT/SRV/NS) are resolved for real over
+// the SOCKS5 listener so mail and service lookups keep working.
+func (e *tunProxyEngine) answerDNS(ctx context.Context, query []byte) ([]byte, error) {
+	name, qtype, qclass, qEnd, ok := parseDNSQuestion(query)
+	if !ok {
+		return nil, errors.New("unsupported dns query")
+	}
+	if qclass == dnsClassIN && qtype == dnsTypeA {
+		return buildDNSResponse(query, qEnd, e.pool.alloc(name)), nil
+	}
+	switch qtype {
+	case dnsTypeMX, dnsTypeTXT, dnsTypeSRV, dnsTypeNS:
+		return e.resolveOverSocks(ctx, query)
+	}
+	return buildDNSResponse(query, qEnd, nil), nil
+}
+
+// parseDNSQuestion reads the single question of a standard query. Compression pointers are not
+// valid in the question of a query, so they are rejected.
+func parseDNSQuestion(q []byte) (name string, qtype, qclass uint16, qEnd int, ok bool) {
+	if len(q) < 12 || q[2]&0x80 != 0 || binary.BigEndian.Uint16(q[4:6]) != 1 {
+		return
+	}
+	pos := 12
+	var labels []byte
+	for {
+		if pos >= len(q) {
+			return
+		}
+		l := int(q[pos])
+		if l == 0 {
+			pos++
+			break
+		}
+		if l&0xC0 != 0 || pos+1+l > len(q) {
+			return
+		}
+		if len(labels) > 0 {
+			labels = append(labels, '.')
+		}
+		for _, c := range q[pos+1 : pos+1+l] {
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			labels = append(labels, c)
+		}
+		pos += 1 + l
+		if len(labels) > 253 {
+			return
+		}
+	}
+	if pos+4 > len(q) || len(labels) == 0 {
+		return
+	}
+	return string(labels), binary.BigEndian.Uint16(q[pos : pos+2]), binary.BigEndian.Uint16(q[pos+2 : pos+4]), pos + 4, true
+}
+
+// buildDNSResponse echoes the question and adds one A record for ip, or none when ip is nil.
+func buildDNSResponse(q []byte, qEnd int, ip net.IP) []byte {
+	resp := make([]byte, 0, qEnd+16)
+	resp = append(resp, q[0], q[1], 0x80|(q[2]&0x78)|(q[2]&0x01), 0x80)
+	answers := byte(0)
+	if ip != nil {
+		answers = 1
+	}
+	resp = append(resp, 0, 1, 0, answers, 0, 0, 0, 0)
+	resp = append(resp, q[12:qEnd]...)
+	if ip != nil {
+		v4 := ip.To4()
+		resp = append(resp, 0xC0, 0x0C, 0, dnsTypeA, 0, dnsClassIN, 0, 0, 0, fakeIPTTLSec, 0, 4, v4[0], v4[1], v4[2], v4[3])
+	}
+	return resp
 }
 
 // resolveOverSocks forwards one DNS query to the configured resolvers over TCP via the local
@@ -420,6 +575,19 @@ func socksConnect(ctx context.Context, socksAddr string, dst net.IP, dport uint1
 	if ip4 == nil {
 		return nil, errors.New("only IPv4 destinations are supported")
 	}
+	return socksConnectRaw(ctx, socksAddr, append([]byte{1}, ip4...), dport)
+}
+
+// socksConnectHost sends the host name itself so the upstream proxy resolves it.
+func socksConnectHost(ctx context.Context, socksAddr string, host string, dport uint16) (net.Conn, error) {
+	if len(host) == 0 || len(host) > 255 {
+		return nil, errors.New("invalid host name")
+	}
+	return socksConnectRaw(ctx, socksAddr, append([]byte{3, byte(len(host))}, host...), dport)
+}
+
+// socksConnectRaw performs the handshake; addr is ATYP followed by the address bytes.
+func socksConnectRaw(ctx context.Context, socksAddr string, addr []byte, dport uint16) (net.Conn, error) {
 	d := net.Dialer{Timeout: tunProxySocksDial}
 	c, err := d.DialContext(ctx, "tcp", socksAddr)
 	if err != nil {
@@ -440,7 +608,8 @@ func socksConnect(ctx context.Context, socksAddr string, dst net.IP, dport uint1
 	if method[0] != 5 || method[1] != 0 {
 		return fail(errors.New("socks5 handshake rejected"))
 	}
-	req := []byte{5, 1, 0, 1, ip4[0], ip4[1], ip4[2], ip4[3], byte(dport >> 8), byte(dport)}
+	req := append([]byte{5, 1, 0}, addr...)
+	req = append(req, byte(dport>>8), byte(dport))
 	if _, err := c.Write(req); err != nil {
 		return fail(err)
 	}

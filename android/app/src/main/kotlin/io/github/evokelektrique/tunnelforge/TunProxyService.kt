@@ -161,13 +161,15 @@ class TunProxyService : VpnService() {
         val thread =
             Thread(
                 {
+                    var first = true
                     try {
                         while (running) {
-                            Thread.sleep(STATS_INTERVAL_MS)
+                            Thread.sleep(if (first) FIRST_STATS_DELAY_MS else STATS_INTERVAL_MS)
+                            first = false
                             if (!running) break
                             val error = VpnBridge.nativeTunProxyLastError()
                             VpnTunnelEvents.emitEngineLog(
-                                Log.DEBUG,
+                                Log.INFO,
                                 TAG,
                                 formatTunProxyStats(VpnBridge.nativeTunProxyStats()) +
                                     if (error.isBlank()) "" else " lastError=$error",
@@ -233,6 +235,7 @@ class TunProxyService : VpnService() {
 
         private const val CHANNEL_ID = "tunnel_forge_tunproxy"
         private const val NOTIFICATION_ID = 7103
+        private const val FIRST_STATS_DELAY_MS = 5_000L
         private const val STATS_INTERVAL_MS = 15_000L
 
         internal const val TUN_MTU = 1500
