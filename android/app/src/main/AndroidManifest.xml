@@ -65,8 +65,12 @@
 
         <service
             android:name=".TunProxyService"
+            android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-initiated whole-device proxy capture (TUN)." />
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
