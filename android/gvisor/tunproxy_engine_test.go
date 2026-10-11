@@ -52,13 +52,14 @@ func udpPacket(src, dst net.IP, sport, dport uint16, payload []byte) []byte {
 	return ipv4Packet(src, dst, 17, u)
 }
 
-func tcpSyn(src, dst net.IP, sport, dport uint16) []byte {
+func tcpSegment(src, dst net.IP, sport, dport uint16, seq, ack uint32, flags byte) []byte {
 	seg := make([]byte, 20)
 	binary.BigEndian.PutUint16(seg[0:], sport)
 	binary.BigEndian.PutUint16(seg[2:], dport)
-	binary.BigEndian.PutUint32(seg[4:], 1000)
+	binary.BigEndian.PutUint32(seg[4:], seq)
+	binary.BigEndian.PutUint32(seg[8:], ack)
 	seg[12] = 5 << 4
-	seg[13] = 0x02 // SYN
+	seg[13] = flags
 	binary.BigEndian.PutUint16(seg[14:], 65535)
 	pseudo := make([]byte, 12)
 	copy(pseudo[0:4], src.To4())
@@ -166,12 +167,17 @@ func TestEngineAnswersDNSWithFakeIPThenProxiesTCPByDomain(t *testing.T) {
 		_, _ = c.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0})
 		time.Sleep(200 * time.Millisecond)
 	}()
-	if _, err := tun.Write(tcpSyn(client, fake, 50000, 443)); err != nil {
+	if _, err := tun.Write(tcpSegment(client, fake, 50000, 443, 1000, 0, 0x02)); err != nil {
 		t.Fatal(err)
 	}
 	synAck := readPacket(t, tun, func(p []byte) bool { return p[9] == 6 && p[20+13] == 0x12 })
 	if binary.BigEndian.Uint16(synAck[20:]) != 443 {
 		t.Fatalf("SYN-ACK from wrong port % x", synAck[:28])
+	}
+	// The forwarder only hands the flow over once the three-way handshake completes.
+	serverSeq := binary.BigEndian.Uint32(synAck[24:])
+	if _, err := tun.Write(tcpSegment(client, fake, 50000, 443, 1001, serverSeq+1, 0x10)); err != nil {
+		t.Fatal(err)
 	}
 	select {
 	case dest := <-got:
@@ -206,7 +212,7 @@ func TestEngineDropsIPv6AndNonDNSUDP(t *testing.T) {
 // run shows where a packet was discarded.
 func engineDiagnostics() string {
 	out := []string{
-		fmt.Sprintf("pktIn=%d pktOut=%d udpDrop=%d dnsOK=%d dnsFailed=%d", tunProxyPktIn.Load(), tunProxyPktOut.Load(), tunProxyUDPDrop.Load(), tunProxyDNSOK.Load(), tunProxyDNSFailed.Load()),
+		fmt.Sprintf("pktIn=%d pktOut=%d udpDrop=%d dnsOK=%d dnsFailed=%d tcpTotal=%d tcpFailed=%d", tunProxyPktIn.Load(), tunProxyPktOut.Load(), tunProxyUDPDrop.Load(), tunProxyDNSOK.Load(), tunProxyDNSFailed.Load(), tunProxyTotalTCP.Load(), tunProxyTCPFailed.Load()),
 		fmt.Sprintf("lastErr=%v", tunProxyLastErr.Load()),
 	}
 	if eng := tunProxyCurrent; eng != nil {
